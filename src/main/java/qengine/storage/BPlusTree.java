@@ -206,7 +206,7 @@ public class BPlusTree {
 
             InternalNode internalNode = (InternalNode) current;
 
-            current = internalNode.children.getFirst();  // Descente vers le nœud feuille
+            current = internalNode.children.get(0);  // Descente vers le nœud feuille
         }
 
         // on peut dire que current est une feuille prck on est sorti du while (le code est AFFREUX) (j'ai modifié du chat gpt mais bon ça reste horrible)

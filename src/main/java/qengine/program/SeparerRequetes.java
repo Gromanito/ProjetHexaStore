@@ -14,71 +14,107 @@ import qengine.model.RDFAtom;
 import qengine.model.StarQuery;
 import qengine.parser.RDFAtomParser;
 import qengine.parser.StarQuerySparQLParser;
+import qengine.storage.RDFHexaStore;
+import qengine.storage.RDFStorage;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
 
-
+import static qengine.program.Utils.*;
 
 
 //fichier pour séparer les requêtes selon leur nombre de réponses
-// on fait jusqu'à 20 (y aura un fichier 0 réponse, un fichier 1 réponse, un fichier 2 réponses etc)
+// on fait jusqu'à 15 (y aura un fichier 0 réponse, un fichier 1 réponse, un fichier 2 réponses etc)
 public class SeparerRequetes {
 
 
+    public static final String nom_fichier_0_reponse_500k = WORKING_DIR_500k + "0_reponse.queryset";
+    public static final String nom_fichier_1_10_reponse_500k = WORKING_DIR_500k + "10_reponse.queryset";
+    public static final String nom_fichier_plus_10_reponse_500k = WORKING_DIR_500k + "plus_10_reponse.queryset";
 
-    private static final String WORKING_DIR = "data/";
-    private static final String TEMPLATE_FICHIER = WORKING_DIR + "queries_%s_answers.queryset";
-    private static final String GENERATED_DATA = WORKING_DIR + "generated_data.nt";
-    private static final String GENERATED_QUERIES = WORKING_DIR + "generated_queries.queryset";
+    public static final String nom_fichier_0_reponse_2M = WORKING_DIR_2M + "0_reponse.queryset";
+    public static final String nom_fichier_1_10_reponse_2M = WORKING_DIR_2M + "10_reponse.queryset";
+    public static final String nom_fichier_plus_10_reponse_2M = WORKING_DIR_2M + "plus_10_reponse.queryset";
 
     public static void main(String[] args) throws IOException {
         /*
          * On récupère tous les triplets et toutes les requêtes qu'on a générées
          */
-
         System.out.println("=== Parsing RDF Data ===");
-        List<RDFAtom> rdfAtoms = parseRDFData(GENERATED_DATA);
+        List<RDFAtom> rdfAtoms = parseRDFData(DATA_500k);
 
         System.out.println("\n=== Parsing Sample Queries ===");
-        List<StarQuery> starQueries = parseSparQLQueries(GENERATED_QUERIES);
+        List<StarQuery> starQueries = new ArrayList<>();
 
-        /*
-         * on ajoute tous les atomes à Integraal (j'aurais pu utiliser mon truc
+        //On ajoute TOUTES les requêtes selon tous les templates qu'on nous a fourni
+        for(String fichier_queryset : getQuerysetFiles(WORKING_DIR_QUERIES))
+            starQueries.addAll(parseSparQLQueries(fichier_queryset));
+
+
+
+
+        /* on ajoute tous les atomes à Integraal
          */
-        System.out.println("\n=== Adding the atoms with Integraal ===");
+        System.out.println("\n=== Adding the atoms with Integraal===");
         FactBase factBase = new SimpleInMemoryGraphStore();
         for (RDFAtom atom : rdfAtoms) {
             factBase.add(atom);  // Stocker chaque RDFAtom dans le store
         }
 
 
-        // on va stocker le nombre de réponse (de 0 à 20) pour chaque requête
-        HashMap<Integer, ArrayList<Query>> queries = new HashMap<>();
 
-        for (int i = 0; i <= 20; i++) {
-            queries.put(i, new ArrayList<Query>());
-        }
 
+
+
+        ArrayList<String> zero_reponse = new ArrayList<>();
+        ArrayList<String> un_dix_reponses = new ArrayList<>();
+        ArrayList<String> plus_dix_reponse = new ArrayList<>();
 
 
         // Exécuter les requêtes sur le store (et compter le nombre de réponses
         for (StarQuery starQuery : starQueries) {
-            queries.get(countAnswers(starQuery, factBase)).add(starQuery);
+            int nbrReponses = countAnswers(starQuery, factBase);
+
+            if (nbrReponses == 0    &&     zero_reponse.size() < 15_000)
+                zero_reponse.add(starQuery.getLabel());
+            else if (nbrReponses <= 10    &&     un_dix_reponses.size() < 15_000 )
+                un_dix_reponses.add(starQuery.getLabel());
+            else if (plus_dix_reponse.size() < 15_000)
+                plus_dix_reponse.add(starQuery.getLabel());
+
         }
 
+        System.out.printf("zero_reponse : %d\n", zero_reponse.size());
+        System.out.printf("110_reponse : %d\n", un_dix_reponses.size());
+        System.out.printf("+10_reponse : %d\n", plus_dix_reponse.size());
 
 
-        // pour chaque nombre de réponses possible, on crée les fichiers
 
-        for (int i = 0; i <= 20; i++) {
-            String filename = String.format( TEMPLATE_FICHIER, i);
+        HashMap<String, ArrayList<String>> noms_fichiers = new HashMap<>();
+        // choisir d'enregistrer les requêtes pour quelle taille? (mettre en commentaire un des 2 groupes de 3 lignes)
+        noms_fichiers.put(nom_fichier_0_reponse_500k, zero_reponse);
+        noms_fichiers.put(nom_fichier_1_10_reponse_500k, un_dix_reponses);
+        noms_fichiers.put(nom_fichier_plus_10_reponse_500k, plus_dix_reponse);
+
+        //noms_fichiers.put(nom_fichier_0_reponse_2M, zero_reponse);
+        //noms_fichiers.put(nom_fichier_1_10_reponse_2M, un_dix_reponses);
+        //noms_fichiers.put(nom_fichier_plus_10_reponse_2M, plus_dix_reponse);
+
+
+
+
+        for (String filename : noms_fichiers.keySet()) {
+
             File file = new File(filename);
 
             // Supprimer le fichier s'il existe
@@ -93,8 +129,8 @@ public class SeparerRequetes {
 
             // Recréer le fichier et y écrire du contenu
             try (FileWriter writer = new FileWriter(file)) {
-                writer.write(String.join(',', queries.get(i))); // Ajouter le contenu du fichier
-                System.out.println("Fichier créé : " + filename);
+                writer.write(String.join("\n\n", noms_fichiers.get(filename))); // Ajouter le contenu du fichier
+
             } catch (IOException e) {
                 System.err.println("Erreur lors de la création ou de l'écriture dans le fichier : " + filename);
                 e.printStackTrace();
@@ -102,100 +138,10 @@ public class SeparerRequetes {
         }
 
 
-         }
 
-
-
-    /**
-     * Parse et affiche le contenu d'un fichier RDF.
-     *
-     * @param rdfFilePath Chemin vers le fichier RDF à parser
-     * @return Liste des RDFAtoms parsés
-     */
-    private static List<RDFAtom> parseRDFData(String rdfFilePath) throws IOException {
-        FileReader rdfFile = new FileReader(rdfFilePath);
-        List<RDFAtom> rdfAtoms = new ArrayList<>();
-
-        try (RDFAtomParser rdfAtomParser = new RDFAtomParser(rdfFile, RDFFormat.NTRIPLES)) {
-            int count = 0;
-            while (rdfAtomParser.hasNext()) {
-                RDFAtom atom = rdfAtomParser.next();
-                rdfAtoms.add(atom);  // Stocker l'atome dans la collection
-                System.out.println("RDF Atom #" + (++count) + ": " + atom);
-            }
-            System.out.println("Total RDF Atoms parsed: " + count);
-        }
-        return rdfAtoms;
-    }
-
-    /**
-     * Parse et affiche le contenu d'un fichier de requêtes SparQL.
-     *
-     * @param queryFilePath Chemin vers le fichier de requêtes SparQL
-     * @return Liste des StarQueries parsées
-     */
-    private static List<StarQuery> parseSparQLQueries(String queryFilePath) throws IOException {
-        List<StarQuery> starQueries = new ArrayList<>();
-
-        try (StarQuerySparQLParser queryParser = new StarQuerySparQLParser(queryFilePath)) {
-            int queryCount = 0;
-
-            while (queryParser.hasNext()) {
-                Query query = queryParser.next();
-                if (query instanceof StarQuery starQuery) {
-                    starQueries.add(starQuery);  // Stocker la requête dans la collection
-                    System.out.println("Star Query #" + (++queryCount) + ":");
-                    System.out.println("  Central Variable: " + starQuery.getCentralVariable().label());
-                    System.out.println("  RDF Atoms:");
-                    starQuery.getRdfAtoms().forEach(atom -> System.out.println("    " + atom));
-                } else {
-                    System.err.println("Requête inconnue ignorée.");
-                }
-            }
-            System.out.println("Total Queries parsed: " + starQueries.size());
-        }
-        return starQueries;
-    }
-
-    /**
-     * Exécute une requête en étoile sur le store et affiche les résultats.
-     *
-     * @param starQuery La requête à exécuter
-     * @param factBase  Le store contenant les atomes
-     */
-    private static void executeStarQuery(StarQuery starQuery, FactBase factBase) {
-        FOQuery<FOFormulaConjunction> foQuery = starQuery.asFOQuery(); // Conversion en FOQuery
-        FOQueryEvaluator<FOFormula> evaluator = GenericFOQueryEvaluator.defaultInstance(); // Créer un évaluateur
-        Iterator<Substitution> queryResults = evaluator.evaluate(foQuery, factBase); // Évaluer la requête
-
-        System.out.printf("Execution of  %s:%n", starQuery);
-        System.out.println("Answers:");
-        if (!queryResults.hasNext()) {
-            System.out.println("No answer.");
-        }
-        while (queryResults.hasNext()) {
-            Substitution result = queryResults.next();
-            System.out.println(result); // Afficher chaque réponse
-        }
-        System.out.println();
     }
 
 
-        private static int countAnswers(StarQuery starQuery, FactBase factBase) {
-            FOQuery<FOFormulaConjunction> foQuery = starQuery.asFOQuery(); // Conversion en FOQuery
-            FOQueryEvaluator<FOFormula> evaluator = GenericFOQueryEvaluator.defaultInstance(); // Créer un évaluateur
-            Iterator<Substitution> queryResults = evaluator.evaluate(foQuery, factBase); // Évaluer la requête
-
-            int i = 0;
-            while(queryResults.hasNext()) {
-                i++;
-                queryResults.next();
-            }
-
-            return i;
-
-
-        }
 }
 
 

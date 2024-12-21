@@ -23,10 +23,12 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 
+import static qengine.program.Utils.*;
+
 public class Correction_Completude {
 
-    private static final String WORKING_DIR = "data/";
-    private static final String SAMPLE_DATA_FILE = WORKING_DIR + "100K.nt";
+    private static final String WORKING_DIR = "data/data_500k/";
+    private static final String SAMPLE_DATA_FILE = WORKING_DIR + "data_generated_500k.nt";
     private static final String SAMPLE_QUERY_FILE = WORKING_DIR + "STAR_ALL_workload.queryset";
 
     public static void main(String[] args) throws IOException {
@@ -37,8 +39,11 @@ public class Correction_Completude {
         List<RDFAtom> rdfAtoms = parseRDFData(SAMPLE_DATA_FILE);
 
         System.out.println("\n=== Parsing Sample Queries ===");
-        List<StarQuery> starQueries = parseSparQLQueries(SAMPLE_QUERY_FILE);
+        List<StarQuery> starQueries = new ArrayList<>();
 
+        //On ajoute TOUTES les requêtes selon tous les templates qu'on nous a fourni
+        for(String fichier_queryset : getQuerysetFiles(WORKING_DIR_QUERIES))
+            starQueries.addAll(parseSparQLQueries(fichier_queryset));
         /*
          * Exemple d'utilisation de l'évaluation de requetes par Integraal avec les objets parsés
          */
@@ -60,7 +65,7 @@ public class Correction_Completude {
 
 
 
-        long start = System.nanoTime();
+
 
         for (StarQuery starQuery : starQueries) {
             //executeStarQuery(starQuery, factBase);
@@ -72,14 +77,6 @@ public class Correction_Completude {
             }
             //else{System.out.println("Les résultats sont identiques");}
         }
-
-
-        long finish = System.nanoTime();
-        long timeElapsed = finish - start;
-        System.out.println(timeElapsed);
-
-
-
 
 
 
@@ -165,19 +162,23 @@ public class Correction_Completude {
     }
 
 
-    private static boolean sameResults(StarQuery starQuery, FactBase factBase, RDFHexaStore rdfHexaStore) {
+    private static boolean sameResults(StarQuery starQuery, FactBase factBase, RDFHexaStore rdfHexaStore) 
+    {   // compare les substitutions obtenues avec l'implémentation de l'hexastore et 
+        // la base de fait de Integraal étant donnée une starQuery
+        
 
-        FOQuery<FOFormulaConjunction> foQuery = starQuery.asFOQuery(); // Conversion en FOQuery
-        FOQueryEvaluator<FOFormula> evaluator = GenericFOQueryEvaluator.defaultInstance(); // Créer un évaluateur
+        FOQuery<FOFormulaConjunction> foQuery = starQuery.asFOQuery(); 
+        FOQueryEvaluator<FOFormula> evaluator = GenericFOQueryEvaluator.defaultInstance(); 
 
-
+        // utilisation des HashSet pour comparer les résultats + rapidement
         HashSet<Substitution> queryResultsFactBase = new HashSet<>();
         HashSet<Substitution> queryResultsHexaStore = new HashSet<>();
-
+        
+        // on enregistre les substitutions obtenues pour l'hexastore et pour la base de fait
         evaluator.evaluate(foQuery, factBase).forEachRemaining(queryResultsFactBase::add);
         rdfHexaStore.match(starQuery).forEachRemaining(queryResultsHexaStore::add);
 
-
+        // on retourne vrai si les deux ensembles sont égaux
         return queryResultsFactBase.equals(queryResultsHexaStore);
 
     }

@@ -31,16 +31,19 @@ public class RDFHexaStore implements RDFStorage {
 
 
     public RDFHexaStore() {
+
+        //les deux dictionnaires pour encoder et décoder les Terms
         dictionaire_Term_int = new HashMap<>();
         dictionaire_int_Term = new HashMap<>();
 
-
+        // les 6 indexes (structures B+Tree)
         SPO = new BPlusTree(20);
         SOP = new BPlusTree(20);
         PSO = new BPlusTree(20);
         POS = new BPlusTree(20);
         OSP = new BPlusTree(20);
         OPS = new BPlusTree(20);
+
     }
 
 
@@ -176,7 +179,6 @@ public class RDFHexaStore implements RDFStorage {
 
         // cas (?x ?y ?z)   -> on utilise SPO
         if(Svariable && Pvariable && Ovariable){
-
             for( Key key : SPO.getAllKeys() ){
                 mapVT = new HashMap<>();
                 mapVT.put((Variable) atom.getTripleSubject(), dictionaire_int_Term.get(key.part1));
@@ -185,9 +187,7 @@ public class RDFHexaStore implements RDFStorage {
 
                 results.add(new SubstitutionImpl(mapVT));
             }
-
         }
-
 
         // cas (s ?y ?z)  -> on utilise SPO encore
         if(!Svariable && Pvariable && Ovariable){
@@ -232,7 +232,6 @@ public class RDFHexaStore implements RDFStorage {
             for( Key key : POS.searchByFirstTwo(Pint, Oint) ){
                 mapVT = new HashMap<>();
                 mapVT.put((Variable) atom.getTripleSubject(), dictionaire_int_Term.get(key.part3));
-
                 results.add(new SubstitutionImpl(mapVT));
             }
         }
@@ -240,11 +239,9 @@ public class RDFHexaStore implements RDFStorage {
 
         // cas (s ?y o)  -> on utilise SOP
         if(!Svariable && Pvariable && !Ovariable){
-
             for( Key key : SOP.searchByFirstTwo(Sint, Oint) ){
                 mapVT = new HashMap<>();
                 mapVT.put((Variable) atom.getTriplePredicate(), dictionaire_int_Term.get(key.part3));
-
                 results.add(new SubstitutionImpl(mapVT));
             }
         }
@@ -292,14 +289,15 @@ public class RDFHexaStore implements RDFStorage {
         ArrayList<ArrayList<Substitution>> toutesLesSubstitutions = new ArrayList<>();
         int nbrSubstitutions = Integer.MAX_VALUE;
 
-
+        // pour chaque atome de la requête
         for (RDFAtom rdfAtom: q.getRdfAtoms()){
-
+            
+            //on fait un match sur cet atome
             ArrayList<Substitution> substitutions = new ArrayList<>();
             this.match(rdfAtom).forEachRemaining(substitutions::add);
             toutesLesSubstitutions.add(substitutions);
 
-            // on enregistre la + petite substitution
+            // on enregistre le match ayant fait le plus petit nombre de substitutions
             if (substitutions.size() < nbrSubstitutions) {
                 nbrSubstitutions = substitutions.size();
                 result = substitutions;
@@ -309,7 +307,7 @@ public class RDFHexaStore implements RDFStorage {
         toutesLesSubstitutions.remove(result);
 
 
-        // Intersection dynamique
+        // Intersection dynamique à partir du plus petit ensemble 
         for (List<Substitution> substitutions : toutesLesSubstitutions) {
             result.retainAll(substitutions); // Réduit la liste principale par intersection
         }
@@ -339,3 +337,4 @@ public class RDFHexaStore implements RDFStorage {
 
     }
 }
+

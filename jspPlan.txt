@@ -1,0 +1,19 @@
+faire en sorte que les tuples se partagent les domaines (pas 1M tuples qui sont que des nationnalité ou des locations ou je sais pas quoi, mais répartir les trucs )
+
+
+
+
+
+supposons qu'on ait nos données, tout ce qu'il nous faut. COmment on mesure le time?
+
+
+
+
+-> déjà on prend pas des nanosecondes mais bien des millisecondes
+-> on ne prend pas le temps sur une seule requête mais bien sur toutes les requêtes groupées
+-> on n'affiche RIEN dans le terminal
+-> on ne regarde pas youtube en même temps
+-> tout est exécuté sur la même machine / environnement
+-> si temps < 0 arrondir à 1
+-> est ce qu'on prend en compte le temps de chargement des atomes? Que celui des requêtes?
+
